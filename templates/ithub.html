@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT HUB - Portail Interne</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<style>
+  :root {
+    --bg-main: #0a0d14; --bg-sidebar: #0f131c; --bg-card: #151a28; --bg-hover: #1c2235;
+    --border: #222a3f; --border-light: #2d3652;
+    --text-main: #e2e8f0; --text-muted: #8b9bb4; --text-faint: #5a6a8a;
+    --accent: #3b82f6; --accent-hover: #2563eb;
+    --green: #10b981; --red: #ef4444; --badge-bg: #1e293b;
+    --radius: 10px; --radius-sm: 6px;
+    font-family: 'Segoe UI', Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: var(--bg-main); color: var(--text-main); height: 100vh; display: flex; font-size: 14px; }
+  button, input { font-family: inherit; }
+
+  /* SIDEBAR */
+  .sidebar { width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 16px; flex-shrink: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; padding: 0 8px; }
+  .brand-icon { width: 40px; height: 40px; background: #5a7dfc; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+  .brand-icon svg { width: 22px; height: 22px; stroke: #fff; }
+  .brand-text h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: 0.5px; }
+  .brand-text span { font-size: 12px; color: var(--text-muted); }
+
+  .nav-group { margin-bottom: 24px; }
+  .nav-label { font-size: 11px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding: 0 8px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; transition: 0.2s; margin-bottom: 4px; }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text-main); }
+  .nav-item.active { background: #1a2235; border: 1px solid #28334e; color: #fff; }
+  .nav-item svg { width: 18px; height: 18px; stroke: currentColor; flex-shrink: 0; }
+  .badge { margin-left: auto; background: var(--badge-bg); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+
+  .status-indicator { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 8px; font-size: 13px; color: var(--text-muted); }
+  .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); transition: 0.3s; }
+  .dot.sync { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+
+  /* MAIN CONTENT */
+  .main { flex: 1; overflow-y: auto; padding: 40px; }
+  
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+  .header h2 { font-size: 24px; margin: 0 0 4px 0; font-weight: 600; }
+  .header p { margin: 0; color: var(--text-muted); font-size: 14px; }
+  
+  .actions { display: flex; gap: 10px; align-items: center; }
+  .search-input { background: var(--bg-main); border: 1px solid var(--border-light); color: var(--text-main); padding: 8px 12px; border-radius: var(--radius-sm); outline: none; font-size: 13px; min-width: 200px; }
+  .search-input:focus { border-color: var(--accent); }
+  
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; background: transparent; color: var(--text-main); }
+  .btn svg { width: 16px; height: 16px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-ghost { border-color: var(--border-light); background: var(--bg-card); }
+  .btn-ghost:hover { border-color: var(--text-muted); }
+
+  /* TABLE */
+  .table-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; text-align: left; }
+  th { padding: 14px 20px; font-size: 12px; text-transform: uppercase; color: var(--text-faint); border-bottom: 1px solid var(--border); font-weight: 600; white-space: nowrap; }
+  td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  tr:last-child td { border-bottom: none; }
+  
+  /* RELATIONS CLIQUABLES */
+  .clickable { color: #5a7dfc; cursor: pointer; font-weight: 600; text-decoration: none; transition: 0.2s; display: inline-block; }
+  .clickable:hover { text-decoration: underline; color: #fff; }
+
+  .action-cell { display: flex; gap: 8px; justify-content: flex-end; }
+  .icon-btn { width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--border-light); cursor: pointer; color: var(--text-muted); transition: 0.2s; }
+  .icon-btn:hover { background: var(--bg-hover); color: #fff; }
+  .icon-btn.danger:hover { color: var(--red); border-color: rgba(239, 68, 68, 0.3); }
+
+  /* DÉPARTEMENTS */
+  .dept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .dept-card { background: var(--bg-card); border: 1px solid var(--border); padding: 20px; border-radius: var(--radius); cursor: pointer; transition: 0.2s; }
+  .dept-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .dept-card h3 { margin: 0 0 8px 0; font-size: 16px; color: #fff; }
+  .dept-card p { margin: 0; color: var(--text-muted); font-size: 13px; }
+
+  /* WIDGET ACCUEIL */
+  .dashboard-widget { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 30px; text-align: center; width: max-content; min-width: 250px; cursor: pointer; transition: 0.2s;}
+  .dashboard-widget:hover { border-color: var(--accent); }
+  .dashboard-widget h3 { font-size: 42px; margin: 0; color: #5a7dfc; font-weight: 800; }
+  .dashboard-widget p { margin: 8px 0 0 0; color: var(--text-muted); font-size: 14px; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: 0.2s; }
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius); width: 100%; max-width: 500px; max-height: 90vh; display: flex; flex-direction: column; transform: translateY(10px); transition: 0.2s; }
+  .modal-overlay.active .modal { transform: none; }
+  .modal-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h3 { margin: 0; font-size: 16px; }
+  .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+  
+  .input-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+  .input-group input { width: 100%; background: var(--bg-main); border: 1px solid var(--border-light); color: #fff; padding: 10px 12px; border-radius: var(--radius-sm); outline: none; }
+  .input-group input:focus { border-color: var(--accent); }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg-card); border-left: 4px solid var(--green); padding: 16px 20px; border-radius: var(--radius-sm); box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 200; transform: translateY(20px); opacity: 0; transition: 0.3s; }
+  .toast.show { transform: none; opacity: 1; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+    <div class="brand-text"><h1>IT HUB</h1><span>Portail Interne</span></div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-label">Navigation</div>
+    <div class="nav-item active" data-target="accueil"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Accueil</div>
+    <div class="nav-item" data-target="bdd"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg> Base de données</div>
+    <div class="nav-item" data-target="kb"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Knowledge Base <span class="badge">0</span></div>
+    <div class="nav-item" data-target="tickets"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M15 5.88 14 10l5.88-1.06a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17 21H7a2 2 0 0 1-1.94-1.5L2.73 11.5A2 2 0 0 1 4.65 8.94l5.88 1.06L11.59 2a2 2 0 0 1 3.41 3.88Z"/></svg> Tickets <span class="badge">0</span></div>
+    <div class="nav-item" data-target="departements"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg> Départements</div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-label">Données</div>
+    <!-- Fichiers Excel dynamiques -->
+    <div class="nav-item" data-entity="users"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Utilisateurs</div>
+    <div class="nav-item" data-entity="hosts"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> PC / Postes</div>
+    <div class="nav-item" data-entity="imprimantes"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimantes</div>
+    <div class="nav-item" data-entity="switchs"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg> Switches / VLAN</div>
+    <div class="nav-item" data-entity="serveurs"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Serveurs</div>
+    <div class="nav-item" data-entity="cameras"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg> Caméras</div>
+    <div class="nav-item" data-entity="vms"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Machines Virtuelles</div>
+    <div class="nav-item" data-entity="logiciels"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Logiciels</div>
+    <div class="nav-item" data-entity="ressources"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Ressources diverses</div>
+  </div>
+
+  <div class="status-indicator">
+    <div class="dot" id="sync-dot"></div> Système opérationnel
+  </div>
+</aside>
+
+<main class="main" id="main-content">
+  <!-- VUE ACCUEIL -->
+  <section class="view active" id="view-accueil">
+    <div class="header">
+      <div><h2>Accueil</h2><p>Tableau de bord de l'infrastructure</p></div>
+    </div>
+    <div class="dashboard-widget" onclick="triggerNav('users')">
+      <h3 id="stat-users">0</h3>
+      <p>Utilisateurs Totaux</p>
+    </div>
+  </section>
+
+  <!-- VUE DÉPARTEMENTS -->
+  <section class="view" id="view-departements">
+    <div class="header">
+      <div><h2>Départements</h2><p>Généré automatiquement selon les services attribués dans l'Excel "Users"</p></div>
+    </div>
+    <div class="dept-grid" id="dept-grid">
+        <!-- Rempli en JS -->
+    </div>
+  </section>
+
+  <!-- VUE GÉNÉRIQUE (Pour les données Excel) -->
+  <section class="view" id="view-dynamic">
+    <div class="header">
+      <div><h2 id="dyn-title">Chargement...</h2><p>Synchronisé avec Excel</p></div>
+      <div class="actions">
+        <!-- BARRE DE RECHERCHE -->
+        <input type="text" id="search-input" class="search-input" placeholder="Filtrer les résultats..." oninput="applyFilter()">
+        
+        <input type="file" id="file-upload" accept=".xlsx" style="display:none;">
+        <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Importer</button>
+        <button class="btn btn-ghost" onclick="downloadCurrent()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Exporter</button>
+        <button class="btn btn-primary" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Ajouter</button>
+      </div>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead id="dyn-thead"></thead>
+        <tbody id="dyn-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL GÉNÉRIQUE -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Ajouter</h3>
+      <button class="icon-btn" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveItem()">Enregistrer (Excel)</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Opération réussie</div>
+
+<script>
+let currentEntity = null;
+let currentColumns = [];
+let currentData = [];
+let editingId = null;
+
+const socket = io();
+socket.on('connect', () => document.getElementById('sync-dot').className = 'dot');
+socket.on('disconnect', () => document.getElementById('sync-dot').className = 'dot danger');
+socket.on('db_updated', (data) => {
+    document.getElementById('sync-dot').className = 'dot sync';
+    setTimeout(() => document.getElementById('sync-dot').className = 'dot', 1000);
+    
+    if(data.entity === 'users') fetchAccueilStat();
+    if(data.entity === currentEntity) loadData(currentEntity);
+});
+
+// GESTION DU MENU
+document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        el.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        
+        if (el.dataset.target === 'accueil') {
+            document.getElementById('view-accueil').classList.add('active');
+            fetchAccueilStat();
+        } else if (el.dataset.target === 'departements') {
+            document.getElementById('view-departements').classList.add('active');
+            generateDepartments();
+        } else if (el.dataset.entity) {
+            document.getElementById('view-dynamic').classList.add('active');
+            document.getElementById('dyn-title').innerText = el.innerText.trim();
+            document.getElementById('search-input').value = ''; // Réinitialiser la recherche
+            loadData(el.dataset.entity);
+        }
+    });
+});
+
+// FONCTION DE NAVIGATION MAGIQUE (Le maillage)
+async function triggerNav(entity, filterTerm = '') {
+    // Simuler le clic sur le bon menu
+    const navItem = document.querySelector(`.nav-item[data-entity="${entity}"]`);
+    if(navItem) {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        navItem.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-dynamic').classList.add('active');
+        document.getElementById('dyn-title').innerText = navItem.innerText.trim();
+        
+        // Charger les données et appliquer le filtre
+        await loadData(entity);
+        document.getElementById('search-input').value = filterTerm;
+        applyFilter();
+    }
+}
+
+// CHARGEMENT ET FILTRAGE DES DONNÉES
+async function loadData(entity) {
+    currentEntity = entity;
+    const res = await fetch(`/api/${entity}`);
+    const db = await res.json();
+    
+    currentColumns = db.columns;
+    currentData = db.data;
+    
+    // Générer l'en-tête
+    document.getElementById('dyn-thead').innerHTML = '<tr>' + 
+        currentColumns.map(col => `<th>${col}</th>`).join('') + 
+        '<th>Actions</th></tr>';
+        
+    applyFilter();
+}
+
+function applyFilter() {
+    const query = document.getElementById('search-input').value.toLowerCase();
+    const filtered = currentData.filter(row => 
+        Object.values(row).some(val => String(val).toLowerCase().includes(query))
+    );
+    renderTbody(filtered);
+}
+
+function renderTbody(data) {
+    document.getElementById('dyn-tbody').innerHTML = data.map(row => {
+        const cells = currentColumns.map(col => {
+            let val = row[col] || '';
+            
+            // LA LOGIQUE DE LIENS CLIQUABLES
+            if (currentEntity === 'users' && (col === 'Service' || col === 'Switch') && val !== '') {
+                val = `<span class="clickable" onclick="triggerNav('users', '${val}')" title="Filtrer par ${val}">${val}</span>`;
+            } else if (currentEntity === 'switchs' && col === 'Nom' && val !== '') {
+                val = `<span class="clickable" onclick="triggerNav('users', '${val}')" title="Voir les utilisateurs sur ce switch">${val}</span>`;
+            }
+            
+            return `<td>${val}</td>`;
+        }).join('');
+        
+        const safeRow = JSON.stringify(row).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        return `<tr>
+            ${cells}
+            <td style="width: 100px;">
+                <div class="action-cell">
+                    <button class="icon-btn" onclick="openModal(${safeRow})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                    <button class="icon-btn danger" onclick="deleteItem(${row.ID})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// GÉRER LA VUE DÉPARTEMENTS
+async function generateDepartments() {
+    try {
+        const res = await fetch('/api/users');
+        const db = await res.json();
+        const users = db.data;
+        const depts = {};
+        
+        // Extraire et compter les services uniques
+        users.forEach(u => {
+            const srv = u.Service || 'Non défini';
+            depts[srv] = (depts[srv] || 0) + 1;
+        });
+        
+        const grid = document.getElementById('dept-grid');
+        grid.innerHTML = Object.entries(depts).map(([name, count]) => `
+            <div class="dept-card" onclick="triggerNav('users', '${name === 'Non défini' ? '' : name}')">
+                <h3>${name}</h3>
+                <p>${count} utilisateur(s) affilié(s)</p>
+            </div>
+        `).join('');
+    } catch(e) {
+        console.error("Erreur chargement départements", e);
+    }
+}
+
+async function fetchAccueilStat() {
+    try {
+        const res = await fetch('/api/users');
+        const db = await res.json();
+        document.getElementById('stat-users').innerText = db.data.length;
+    } catch(e) {}
+}
+
+// MODAL DYNAMIQUE
+function openModal(rowData = null) {
+    editingId = rowData ? rowData.ID : null;
+    document.getElementById('modal-title').innerText = rowData ? "Modifier" : "Ajouter";
+    
+    document.getElementById('modal-body').innerHTML = currentColumns.map(col => {
+        if(col === 'ID') return '';
+        const val = rowData ? (rowData[col] || '') : '';
+        return `<div class="input-group">
+            <label>${col}</label>
+            <input type="text" id="input-${col}" value="${val}">
+        </div>`;
+    }).join('');
+    
+    document.getElementById('modal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.remove('active');
+}
+
+// ACTIONS API (Save, Delete, Upload)
+async function saveItem() {
+    const data = {};
+    currentColumns.forEach(col => {
+        if(col !== 'ID') data[col] = document.getElementById(`input-${col}`).value;
+    });
+    
+    const method = editingId ? 'PUT' : 'POST';
+    const url = editingId ? `/api/${currentEntity}/${editingId}` : `/api/${currentEntity}`;
+    
+    await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+    closeModal();
+    showToast("Sauvegardé et synchronisé avec Excel !");
+}
+
+async function deleteItem(id) {
+    if(!confirm("Supprimer définitivement de l'Excel ?")) return;
+    await fetch(`/api/${currentEntity}/${id}`, { method: 'DELETE' });
+    showToast("Supprimé avec succès.");
+}
+
+document.getElementById('file-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    await fetch(`/api/${currentEntity}/upload`, { method: 'POST', body: formData });
+    e.target.value = '';
+    showToast("Fichier Excel importé !");
+});
+
+function downloadCurrent() {
+    if(currentEntity) window.location.href = `/api/${currentEntity}/download`;
+}
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// INIT
+fetchAccueilStat();
+</script>
+</body>
+</html>

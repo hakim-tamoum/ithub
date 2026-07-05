@@ -1,0 +1,6 @@
+flask
+flask-socketio
+pandas
+openpyxl
+watchdog
+eventlet
